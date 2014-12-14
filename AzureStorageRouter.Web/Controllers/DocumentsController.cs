@@ -37,7 +37,6 @@ namespace AzureStorageRouter.Web.Controllers
         }
 
         // POST: api/Documents
-        [Route("api/documents", Order = 1)]
         public async Task<IEnumerable<string>> Post()
         {
             /* Only process multipart content */
@@ -69,7 +68,7 @@ namespace AzureStorageRouter.Web.Controllers
         }
 
         // PUT: api/Documents/path/to/document
-        [Route("api/documents/{*path}")]
+        //[Route("api/documents/{*path}")]
         public async Task<string> Put(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
