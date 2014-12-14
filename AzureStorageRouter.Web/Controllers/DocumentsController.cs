@@ -55,6 +55,11 @@ namespace AzureStorageRouter.Web.Controllers
                 name = name.Trim('\"'); // Encoded filename will have double quotes around the name
                 var blob = container.GetBlockBlobReference(name);
                 await blob.UploadFromStreamAsync(await httpContent.ReadAsStreamAsync());
+                if (httpContent.Headers.ContentType.MediaType != null)
+                {
+                    blob.Properties.ContentType = httpContent.Headers.ContentType.MediaType;
+                    await blob.SetPropertiesAsync();
+                }
 
                 paths.Add(blob.Uri.ToString());
             }
