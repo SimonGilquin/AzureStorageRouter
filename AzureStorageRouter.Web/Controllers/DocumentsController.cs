@@ -11,6 +11,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace AzureStorageRouter.Web.Controllers
 {
+    [Authorize]
     public class DocumentsController : ApiController
     {
         private readonly CloudBlobClient client;
