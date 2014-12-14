@@ -9,7 +9,7 @@ namespace AzureStorageRouter.Web.Models
     public class Document
     {
         [Key]
-        public string FileName { get; set; }
+        public string Filename { get; set; }
 
     }
 }

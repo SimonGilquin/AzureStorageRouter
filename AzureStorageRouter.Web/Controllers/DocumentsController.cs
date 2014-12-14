@@ -1,130 +1,91 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
+using System.Configuration;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
-using System.Web.Http.ModelBinding;
-using System.Web.Http.OData;
-using System.Web.Http.OData.Query;
-using System.Web.Http.OData.Routing;
-using AzureStorageRouter.Web.Models;
-using Microsoft.Data.OData;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace AzureStorageRouter.Web.Controllers
 {
-    /*
-    The WebApiConfig class may require additional changes to add a route for this controller. Merge these statements into the Register method of the WebApiConfig class as applicable. Note that OData URLs are case sensitive.
-
-    using System.Web.Http.OData.Builder;
-    using System.Web.Http.OData.Extensions;
-    using AzureStorageRouter.Web.Models;
-    ODataConventionModelBuilder builder = new ODataConventionModelBuilder();
-    builder.EntitySet<Document>("Documents");
-    config.Routes.MapODataServiceRoute("odata", "odata", builder.GetEdmModel());
-    */
-    public class DocumentsController : ODataController
+    public class DocumentsController : ApiController
     {
-        private static ODataValidationSettings _validationSettings = new ODataValidationSettings();
+        private readonly CloudBlobClient client;
+        private CloudBlobContainer container;
 
-        // GET: odata/Documents
-        public async Task<IHttpActionResult> GetDocuments(ODataQueryOptions<Document> queryOptions)
+        public DocumentsController()
         {
-            // validate the query.
-            try
-            {
-                queryOptions.Validate(_validationSettings);
-            }
-            catch (ODataException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-
-            // return Ok<IEnumerable<Document>>(documents);
-            return StatusCode(HttpStatusCode.NotImplemented);
+            var account = CloudStorageAccount.Parse(ConfigurationManager.AppSettings["DocumentStoreConnectionString"]);
+            client = account.CreateCloudBlobClient();
+            container = client.GetContainerReference("documents");
         }
 
-        // GET: odata/Documents(5)
-        public async Task<IHttpActionResult> GetDocument([FromODataUri] string key, ODataQueryOptions<Document> queryOptions)
+        // GET: api/Documents
+        public IEnumerable<string> Get()
         {
-            // validate the query.
-            try
-            {
-                queryOptions.Validate(_validationSettings);
-            }
-            catch (ODataException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-
-            // return Ok<Document>(document);
-            return StatusCode(HttpStatusCode.NotImplemented);
+            return new string[] { "value1", "value2" };
         }
 
-        // PUT: odata/Documents(5)
-        public async Task<IHttpActionResult> Put([FromODataUri] string key, Delta<Document> delta)
+        // GET: api/Documents/5
+        public string Get(int id)
         {
-            Validate(delta.GetEntity());
-
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            // TODO: Get the entity here.
-
-            // delta.Put(document);
-
-            // TODO: Save the patched entity.
-
-            // return Updated(document);
-            return StatusCode(HttpStatusCode.NotImplemented);
+            return "value";
         }
 
-        // POST: odata/Documents
-        public async Task<IHttpActionResult> Post(Document document)
+        // POST: api/Documents
+        [Route("api/documents", Order = 1)]
+        public async Task<IEnumerable<string>> Post()
         {
-            if (!ModelState.IsValid)
+            /* Only process multipart content */
+            if (!Request.Content.IsMimeMultipartContent())
             {
-                return BadRequest(ModelState);
+                throw new HttpResponseException(HttpStatusCode.UnsupportedMediaType);
             }
 
-            // TODO: Add create logic here.
+            var document = await Request.Content.ReadAsMultipartAsync();
+            await container.CreateIfNotExistsAsync();
 
-            // return Created(document);
-            return StatusCode(HttpStatusCode.NotImplemented);
-        }
-
-        // PATCH: odata/Documents(5)
-        [AcceptVerbs("PATCH", "MERGE")]
-        public async Task<IHttpActionResult> Patch([FromODataUri] string key, Delta<Document> delta)
-        {
-            Validate(delta.GetEntity());
-
-            if (!ModelState.IsValid)
+            var paths = new List<string>();
+            foreach (var httpContent in document.Contents)
             {
-                return BadRequest(ModelState);
+                var name = httpContent.Headers.ContentDisposition.FileName ?? Guid.NewGuid().ToString();
+                name = name.Trim('\"'); // Encoded filename will have double quotes around the name
+                var blob = container.GetBlockBlobReference(name);
+                await blob.UploadFromStreamAsync(await httpContent.ReadAsStreamAsync());
+
+                paths.Add(blob.Uri.ToString());
             }
 
-            // TODO: Get the entity here.
-
-            // delta.Patch(document);
-
-            // TODO: Save the patched entity.
-
-            // return Updated(document);
-            return StatusCode(HttpStatusCode.NotImplemented);
+            return paths;
         }
 
-        // DELETE: odata/Documents(5)
-        public async Task<IHttpActionResult> Delete([FromODataUri] string key)
+        // PUT: api/Documents/path/to/document
+        [Route("api/documents/{*path}")]
+        public async Task<string> Put(string path)
         {
-            // TODO: Add delete logic here.
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new HttpResponseException(HttpStatusCode.BadRequest);
+            }
+            var documentStream = await Request.Content.ReadAsStreamAsync();
+            if (documentStream.Length == 0)
+            {
+                throw new HttpResponseException(HttpStatusCode.BadRequest);
+            }
 
-            // return StatusCode(HttpStatusCode.NoContent);
-            return StatusCode(HttpStatusCode.NotImplemented);
+            await container.CreateIfNotExistsAsync();
+
+            var blob = container.GetBlockBlobReference(path);
+            await blob.UploadFromStreamAsync(documentStream);
+            return blob.Uri.ToString();
+        }
+
+        // DELETE: api/Documents/5
+        public void Delete(int id)
+        {
         }
     }
 }
